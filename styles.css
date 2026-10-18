@@ -24,6 +24,8 @@
 .primary-button:hover{background:#31551f}
 .primary-button:disabled{opacity:.6;cursor:wait}
 .search-note{margin:8px 0 0;color:#697981}
+.global-search .city-section,.global-search .center-section{display:none}
+.global-search .radius-legend{display:none}
 .sidebar-foot{font-size:11px}
 .muted{font-size:12px}
 .map-legend{font-size:11px}
