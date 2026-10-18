@@ -1,94 +1,115 @@
-const SOURCE = 'https://pokecoords.iflowgo.com/iflowgopokecoords/api/v1/nearby';
-const MAX_RADIUS_KM = 25;
+const API = 'https://map.pokecoords.com/api';
 const EARTH_KM = 6371.0088;
+const RADII = new Set([5, 10, 25, 50, 100]);
 
-const distanceKm = (a, b) => {
-  const rad = (v) => v * Math.PI / 180;
-  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+function distanceKm(a, b) {
+  const rad = (value) => value * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * EARTH_KM * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-};
-
-function tileCenters(center, radius) {
-  if (radius <= MAX_RADIUS_KM) return [center];
-  const spacing = 40;
-  const rowStep = spacing * Math.sqrt(3) / 2;
-  const centers = [center];
-  const extent = radius + MAX_RADIUS_KM;
-  const minRow = Math.floor(-extent / rowStep), maxRow = Math.ceil(extent / rowStep);
-  for (let row = minRow; row <= maxRow; row += 1) {
-    const northKm = row * rowStep;
-    const offsetX = Math.abs(row % 2) * spacing / 2;
-    const minCol = Math.floor((-extent - offsetX) / spacing), maxCol = Math.ceil((extent - offsetX) / spacing);
-    for (let col = minCol; col <= maxCol; col += 1) {
-      const eastKm = col * spacing + offsetX;
-      if (Math.hypot(northKm, eastKm) > radius + MAX_RADIUS_KM) continue;
-      const lat = center.lat + northKm / 111.195;
-      const lon = center.lon + eastKm / (111.195 * Math.cos(center.lat * Math.PI / 180));
-      const candidate = { lat, lon };
-      if (distanceKm(center, candidate) <= radius + MAX_RADIUS_KM && !centers.some((p) => distanceKm(p, candidate) < 1)) centers.push(candidate);
-    }
-  }
-  return centers;
 }
 
-async function queryTile(center, signal) {
-  const params = new URLSearchParams({
-    lat: String(center.lat), lon: String(center.lon), radius_km: String(MAX_RADIUS_KM),
-    layers: 'spawns', limit: '800',
-  });
-  const response = await fetch(`${SOURCE}?${params}`, { signal, headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error(`El feed respondió HTTP ${response.status}.`);
-  const data = await response.json();
-  if (!Array.isArray(data.spawns)) throw new Error('El feed devolvió una respuesta sin lista de spawns.');
-  return data;
+function credentials() {
+  const bearer = process.env.POKECOORDS_BEARER_TOKEN;
+  const session = process.env.POKECOORDS_SESSION_TOKEN;
+  if (!bearer || !session) return null;
+  return {
+    Authorization: `Bearer ${bearer}`,
+    Cookie: `session_token=${session}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    'x-language': 'en',
+  };
+}
+
+async function readFeed(headers) {
+  const response = await fetch(`${API}/feed/`, { headers });
+  if (!response.ok) throw new Error(`Lectura de configuración PokéCoords: HTTP ${response.status}.`);
+  const feed = await response.json();
+  const entries = Array.isArray(feed) ? feed : [];
+  return entries.find((item) => item && typeof item.filter_id === 'string') || null;
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ error: 'Método no permitido.' });
   }
 
-  const lat = Number(req.query.lat), lon = Number(req.query.lon), radius = Number(req.query.radius || 25);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || ![5, 10, 25, 50, 100].includes(radius)) {
+  const lat = Number(req.query.lat);
+  const lon = Number(req.query.lon);
+  const radius = Number(req.query.radius || 25);
+  const onlyHundos = req.query.hundos === 'true';
+  const pokemonId = req.query.pokemonId ? Number(req.query.pokemonId) : null;
+  if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180 || !RADII.has(radius)) {
     return res.status(400).json({ error: 'Centro o radio no válido. Radios permitidos: 5, 10, 25, 50 y 100 km.' });
   }
+  if (pokemonId !== null && (!Number.isInteger(pokemonId) || pokemonId < 1 || pokemonId > 2000)) {
+    return res.status(400).json({ error: 'El número de Pokédex no es válido.' });
+  }
 
-  const center = { lat, lon };
-  const centers = tileCenters(center, radius);
-  const rows = [];
+  const headers = credentials();
+  if (!headers) {
+    return res.status(503).json({ error: 'Falta configurar el acceso de PokéCoords en Vercel.' });
+  }
+
   try {
-    for (let i = 0; i < centers.length; i += 12) {
-      const batch = centers.slice(i, i + 12);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      let pages;
-      try { pages = await Promise.all(batch.map((tile) => queryTile(tile, controller.signal))); }
-      finally { clearTimeout(timer); }
-      for (const page of pages) rows.push(...page.spawns);
+    const savedFilter = onlyHundos ? null : await readFeed(headers);
+    if (!onlyHundos && !savedFilter) {
+      return res.status(502).json({ error: 'PokéCoords no devolvió una configuración de búsqueda.' });
     }
+
+    // La petición reproduce los campos geográficos observados en el HAR.
+    // Para el modo hundo se combina el filtro permanente de 100% con ese ámbito.
+    const body = {
+      filter_id: onlyHundos ? 'permanent_100iv_filter' : savedFilter.filter_id,
+      min_iv: onlyHundos ? 100 : 0,
+      max_iv: 100,
+      min_lv: onlyHundos ? 0 : 1,
+      max_lv: 35,
+      latitude: lat,
+      longitude: lon,
+      range: radius * 1000,
+    };
+    if (pokemonId !== null) body.selected_dex = [pokemonId];
+
+    const response = await fetch(`${API}/pokemon/worldwide`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const detail = response.status === 401 || response.status === 403
+        ? 'La sesión de PokéCoords ha caducado o no tiene acceso.'
+        : `PokéCoords respondió HTTP ${response.status}.`;
+      return res.status(response.status === 401 || response.status === 403 ? 502 : response.status).json({ error: detail });
+    }
+
+    const rows = await response.json();
+    if (!Array.isArray(rows)) return res.status(502).json({ error: 'PokéCoords devolvió una respuesta inesperada.' });
+    const center = { lat, lon };
     const unique = new Map();
     for (const row of rows) {
-      if (!Number.isFinite(Number(row.lat)) || !Number.isFinite(Number(row.lon))) continue;
-      const distance = distanceKm(center, { lat: Number(row.lat), lon: Number(row.lon) });
+      const rowLat = Number(row.lat);
+      const rowLon = Number(row.lng);
+      if (!Number.isFinite(rowLat) || !Number.isFinite(rowLon)) continue;
+      const distance = distanceKm(center, { lat: rowLat, lon: rowLon });
       if (distance > radius) continue;
-      const key = row.id || `${row.pokemon_id}:${row.lat}:${row.lon}:${row.expires_at}`;
-      if (!unique.has(key)) unique.set(key, { ...row, distance_m: Math.round(distance * 1000) });
+      const key = String(row.id ?? `${row.dex}:${rowLat}:${rowLon}:${row.despawn}`);
+      if (!unique.has(key)) unique.set(key, { ...row, distance_km: Number(distance.toFixed(3)) });
     }
-    const spawns = [...unique.values()].sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at));
+
+    const spawns = [...unique.values()];
     return res.status(200).json({
-      provider: 'iFlowGo PoGo Radar', center, radius_km: radius,
-      tile_count: centers.length, count: spawns.length,
-      hundos: spawns.filter((row) => Number(row.percent_iv) === 100).length,
+      provider: 'PokéCoords', center, radius_km: radius,
+      count: spawns.length,
+      hundos: spawns.filter((row) => Number(row.iv) === 100).length,
       generated_at: new Date().toISOString(), spawns,
     });
   } catch (error) {
-    const timeout = error.name === 'AbortError';
-    return res.status(502).json({
-      error: timeout ? 'El feed tardó demasiado en responder.' : 'No se pudo consultar el feed de spawns.',
-      detail: error.message, provider: 'iFlowGo PoGo Radar',
-    });
+    return res.status(502).json({ error: 'No se pudo consultar el feed de PokéCoords.', detail: error.message });
   }
 };
