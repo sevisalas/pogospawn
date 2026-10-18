@@ -3,12 +3,12 @@
     { key: 'valencia', name: 'Valencia', lat: 39.4699, lon: -0.3763 },
     { key: 'zaragoza', name: 'Zaragoza', lat: 41.65624, lon: -0.8788 },
   ];
-  const RADII = [5, 10, 25, 50, 100];
+  const RADII = [5, 10, 25, 50, 100, 150, 200, 250, 300];
   const HOME = CITIES[0];
   const state = {
     center: { lat: HOME.lat, lon: HOME.lon }, activeCity: HOME.key, resetCity: HOME.key, radius: 25,
     rawRows: [], rows: [], map: null, heat: null, markers: null, centerMarker: null, radiusCircle: null,
-    lastUpdated: null, loading: false,
+    lastUpdated: null, loading: false, reloadQueued: false, searchIds: [], globalHundos: true,
   };
   const $ = (id) => document.getElementById(id);
   const num = (v) => typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'));
@@ -29,6 +29,20 @@
     return `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s`;
   };
   const toast = (message) => { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3500); };
+  const searchTerms = (value) => value.split(/[,;\n]+/).map((term) => term.trim()).filter(Boolean);
+
+  async function resolvePokemonId(value) {
+    const term = value.trim().replace(/^#/, '');
+    if (/^\d+$/.test(term)) return Number(term);
+    let slug = term.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    slug = slug.replace(/♀/g, '-f').replace(/♂/g, '-m').replace(/[’']/g, '').replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (!slug) throw new Error('Escribe un nombre o número de Pokédex.');
+    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(slug)}`);
+    if (!response.ok) throw new Error(`No encuentro “${term}” en la Pokédex. Prueba con su nombre inglés o número.`);
+    const pokemon = await response.json();
+    if (!Number.isInteger(pokemon.id)) throw new Error(`No encuentro “${term}” en la Pokédex.`);
+    return pokemon.id;
+  }
 
   function normalize(row) {
     const lat = num(row.lat), lon = num(row.lng), id = Number(row.dex);
@@ -69,8 +83,14 @@
       setCenter(city.lat, city.lon, true, city.key); loadData();
     });
     $('refresh').addEventListener('click', loadData);
+    $('search-submit').addEventListener('click', loadData);
     $('only-hundos').addEventListener('change', loadData);
-    $('pokemon-filter').addEventListener('input', render);
+    $('pokemon-filter').addEventListener('input', () => {
+      const hasSearch = searchTerms($('pokemon-filter').value).length > 0;
+      $('only-hundos').checked = !hasSearch;
+      state.searchIds = []; state.globalHundos = !hasSearch; render();
+    });
+    $('pokemon-filter').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadData(); });
   }
 
   function initMap() {
@@ -90,7 +110,10 @@
     if (!state.map || !state.radiusCircle) return;
     state.radiusCircle.setLatLng([state.center.lat, state.center.lon]);
     state.radiusCircle.setRadius(state.radius * 1000);
-    state.map.fitBounds(state.radiusCircle.getBounds(), { padding: [18, 18], maxZoom: 13 });
+    const globalHundos = state.globalHundos;
+    state.radiusCircle.setStyle({ opacity: globalHundos ? 0 : 1, fillOpacity: globalHundos ? 0 : 0.035 });
+    state.centerMarker?.setOpacity(globalHundos ? 0 : 1);
+    if (!globalHundos) state.map.fitBounds(state.radiusCircle.getBounds(), { padding: [18, 18], maxZoom: 13 });
   }
 
   function setCenter(lat, lon, updateInputs = true, cityKey = null) {
@@ -107,15 +130,24 @@
   }
 
   async function loadData() {
-    if (state.loading) return;
+    if (state.loading) { state.reloadQueued = true; return; }
     state.loading = true; $('data-status').textContent = 'Consultando feed en directo…';
     try {
       const params = new URLSearchParams({
         lat: String(state.center.lat), lon: String(state.center.lon), radius: String(state.radius),
         hundos: String($('only-hundos').checked),
       });
-      const search = $('pokemon-filter').value.trim().replace(/^#/, '');
-      if (/^\d+$/.test(search)) params.set('pokemonId', search);
+      const terms = searchTerms($('pokemon-filter').value);
+      state.globalHundos = terms.length === 0;
+      if (state.globalHundos) $('only-hundos').checked = true;
+      state.searchIds = [];
+      if (terms.length) {
+        $('search-submit').disabled = true;
+        $('search-submit').textContent = 'Buscando Pokémon…';
+        state.searchIds = [...new Set(await Promise.all(terms.map(resolvePokemonId)))];
+        params.set('pokemonIds', state.searchIds.join(','));
+      }
+      params.set('hundos', String(state.globalHundos || $('only-hundos').checked));
       const response = await fetch(`/api/spawns?${params}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ? `${data.error} ${data.detail}` : (data.error || `Error ${response.status}`));
@@ -125,8 +157,10 @@
       $('data-status').textContent = `${count.toLocaleString('es-ES')} resultados · ${hundos} hundos`;
       document.querySelector('.live-dot').style.background = '#79bd43';
       document.querySelector('.live-dot').style.boxShadow = '0 0 0 3px #e8f5dc';
-      $('stat-total').textContent = `${data.count.toLocaleString('es-ES')} resultados recibidos · ${state.radius} km`;
+      $('stat-total').textContent = state.globalHundos ? `${data.count.toLocaleString('es-ES')} hundos globales` : `${data.count.toLocaleString('es-ES')} resultados · hasta ${state.radius} km`;
       $('stat-updated').textContent = fmtTime(data.generated_at);
+      $('search-submit').textContent = 'Buscar / actualizar';
+      $('search-submit').disabled = false;
       render();
     } catch (error) {
       $('data-status').textContent = 'Feed no disponible';
@@ -134,8 +168,13 @@
       document.querySelector('.live-dot').style.boxShadow = '0 0 0 3px #f9eedc';
       $('stat-total').textContent = error.message;
       state.rawRows = []; $('stat-updated').textContent = '—'; render();
+      $('search-submit').textContent = 'Buscar / actualizar';
+      $('search-submit').disabled = false;
       toast(error.message);
-    } finally { state.loading = false; }
+    } finally {
+      state.loading = false;
+      if (state.reloadQueued) { state.reloadQueued = false; loadData(); }
+    }
   }
 
   function popup(row) {
@@ -144,18 +183,35 @@
   }
 
   function render() {
-    const query = $('pokemon-filter').value.trim().replace(/^#/, '').toLowerCase();
-    const onlyHundos = $('only-hundos').checked;
+    const queries = searchTerms($('pokemon-filter').value).map((term) => term.replace(/^#/, '').toLowerCase());
+    const globalHundos = searchTerms($('pokemon-filter').value).length === 0;
+    state.globalHundos = globalHundos;
+    if (globalHundos) $('only-hundos').checked = true;
+    const onlyHundos = globalHundos || $('only-hundos').checked;
+    document.body.classList.toggle('global-search', globalHundos);
+    document.querySelector('.city-section').hidden = globalHundos;
+    document.querySelector('.center-section').hidden = globalHundos;
+    document.querySelector('.radius-legend').hidden = globalHundos;
     state.rows = state.rawRows.map((row) => ({ ...row, distance: distanceKm(state.center, row) }))
-      .filter((row) => row.distance <= state.radius && (!onlyHundos || row.iv === 100)
-        && (!query || String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query)));
+      .filter((row) => (globalHundos || row.distance <= state.radius) && (!onlyHundos || row.iv === 100)
+        && (!queries.length || queries.some((query) => String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query) || state.searchIds.includes(row.pokemonId))));
     const activeCity = CITIES.find((item) => item.key === state.activeCity);
-    $('radius-label').textContent = `${state.radius} km`;
-    $('map-subtitle').textContent = `Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
-    $('stat-spawns').textContent = state.rawRows.filter((row) => distanceKm(state.center, row) <= state.radius).length.toLocaleString('es-ES');
-    $('stat-hundos').textContent = state.rawRows.filter((row) => row.iv === 100 && distanceKm(state.center, row) <= state.radius).length.toLocaleString('es-ES');
+    $('only-hundos').disabled = globalHundos;
+    $('radius-label').textContent = globalHundos ? 'Global' : `${state.radius} km`;
+    $('radius-options').classList.toggle('disabled', globalHundos);
+    $('radius-note').textContent = globalHundos ? 'La búsqueda inicial de hundos es global.' : 'Radio aplicado a la búsqueda por Pokémon (hasta 300 km).';
+    $('search-note').textContent = globalHundos ? 'Por defecto se buscan hundos en todo PokéCoords. Escribe uno o varios Pokémon para buscar en el radio y elegir Solo 100% o todos.' : 'Separa varios nombres en inglés o números de Pokédex con comas. Activa Solo 100% IV para limitar esta búsqueda.';
+    $('map-subtitle').textContent = globalHundos ? `Hundos globales · ${state.rows.length} resultados recibidos` : `${onlyHundos ? 'Solo 100% IV · ' : ''}Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
+    $('stat-spawns-label').textContent = globalHundos ? 'HUNDOS GLOBALES' : (onlyHundos ? 'HUNDOS EN EL RADIO' : 'SPAWNS EN EL RADIO');
+    $('stat-species-note').textContent = globalHundos ? 'En resultados globales' : 'En el radio seleccionado';
+    const visibleHundos = state.rows.filter((row) => row.iv === 100).length;
+    $('stat-spawns').textContent = onlyHundos ? visibleHundos.toLocaleString('es-ES') : state.rows.length.toLocaleString('es-ES');
+    $('stat-hundos').textContent = globalHundos ? visibleHundos.toLocaleString('es-ES') : state.rawRows.filter((row) => row.iv === 100 && distanceKm(state.center, row) <= state.radius).length.toLocaleString('es-ES');
+    $('stat-total').textContent = globalHundos ? `${state.rawRows.length.toLocaleString('es-ES')} hundos globales` : `${state.rawRows.length.toLocaleString('es-ES')} resultados recibidos · ${state.radius} km`;
     $('stat-species').textContent = new Set(state.rows.map((row) => row.pokemonId)).size.toLocaleString('es-ES');
-    $('map-count').textContent = `${state.rows.length.toLocaleString('es-ES')} spawns mostrados · ${state.rawRows.filter((row) => row.iv === 100 && distanceKm(state.center, row) <= state.radius).length} hundos`;
+    $('map-count').textContent = globalHundos ? `${visibleHundos} hundos globales` : `${state.rows.length.toLocaleString('es-ES')} spawns mostrados · ${state.rawRows.filter((row) => row.iv === 100 && distanceKm(state.center, row) <= state.radius).length} hundos`;
+    if (state.radiusCircle) state.radiusCircle.setStyle({ opacity: globalHundos ? 0 : 1, fillOpacity: globalHundos ? 0 : 0.035 });
+    if (state.centerMarker) state.centerMarker.setOpacity(globalHundos ? 0 : 1);
     if (state.heat) state.heat.setLatLngs(state.rows.map((row) => [row.lat, row.lon, row.iv === 100 ? 1 : 0.45]));
     if (state.markers) {
       state.markers.clearLayers();
@@ -167,8 +223,12 @@
     }
     $('spawn-list').innerHTML = state.rows.length ? state.rows.slice().sort((a, b) => b.iv - a.iv || new Date(a.expiresAt) - new Date(b.expiresAt)).slice(0, 250).map((row) => {
       const hundo = row.iv === 100;
-      return `<button class="spawn-row${hundo ? ' hundo' : ''}" data-spawn="${safe(row.id)}"><span class="spawn-sprite">${hundo ? '💯' : `#${row.pokemonId}`}</span><span class="spawn-info"><strong>${safe(row.species)}${hundo ? ' · HUNDO' : ''}</strong><small>IV ${row.iv.toFixed(2)}% · CP ${row.cp} · Nv. ${row.level}</small><small>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)} · expira ${safe(timeLeft(row.expiresAt))}</small></span><span class="spawn-distance">${row.distance.toFixed(1)} km</span></button>`;
-    }).join('') : `<div class="empty-state">${state.loading ? 'Consultando el feed…' : (onlyHundos ? `No hay hundos activos en este radio. El feed tiene ${state.rawRows.length} spawns activos en total.` : 'No hay spawns activos en el radio seleccionado.')}</div>`;
+      return `<button class="spawn-row${hundo ? ' hundo' : ''}" data-spawn="${safe(row.id)}"><span class="spawn-sprite">${hundo ? '💯' : `#${row.pokemonId}`}</span><span class="spawn-info"><strong>${safe(row.species)}${hundo ? ' · HUNDO' : ''}</strong><small>IV ${row.iv.toFixed(2)}% · CP ${row.cp} · Nv. ${row.level}</small><small>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)} · expira ${safe(timeLeft(row.expiresAt))}</small></span><span class="spawn-distance">${onlyHundos ? 'Global' : `${row.distance.toFixed(1)} km`}</span></button>`;
+    }).join('') : `<div class="empty-state">${state.loading ? 'Consultando el feed…' : (onlyHundos ? 'PokéCoords no devolvió hundos globales en esta consulta.' : 'No hay spawns en el radio seleccionado.')}</div>`;
+    if (globalHundos && state.rows.length && state.map) {
+      const bounds = L.latLngBounds(state.rows.map((row) => [row.lat, row.lon]));
+      state.map.fitBounds(bounds, { padding: [25, 25], maxZoom: 5 });
+    }
     $('spawn-list').querySelectorAll('[data-spawn]').forEach((button) => button.addEventListener('click', () => {
       const row = state.rows.find((item) => item.id === button.dataset.spawn); if (!row) return;
       state.map.setView([row.lat, row.lon], 16); state.markers.eachLayer((marker) => { if (marker.getLatLng().lat === row.lat && marker.getLatLng().lng === row.lon) marker.openPopup(); });

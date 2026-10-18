@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#101a24" />
     <title>POGO — Buscador Valencia y Zaragoza</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=2" />
   </head>
   <body>
     <header class="topbar">
@@ -25,31 +25,33 @@
         <section class="control-section">
           <div class="section-heading"><span>RADIO DE ANÁLISIS</span><strong id="radius-label">25 km</strong></div>
           <div class="radius-options" id="radius-options" aria-label="Seleccionar radio"></div>
-          <div class="range-track"><span>Solo se incluyen spawns dentro del radio seleccionado.</span></div>
+          <div class="range-track"><span id="radius-note">Radio aplicado a la búsqueda por Pokémon (hasta 300 km).</span></div>
         </section>
-        <section class="control-section">
-          <label class="toggle-label"><input id="only-hundos" type="checkbox"><span>Mostrar solo hundos (100% IV)</span></label>
-          <label class="coord-label">POKÉMON<input id="pokemon-filter" type="search" placeholder="Nombre o número de Pokédex"></label>
+        <section class="control-section search-section">
+          <label class="toggle-label"><input id="only-hundos" type="checkbox" checked><span>Solo 100% IV</span></label>
+          <label class="coord-label">POKÉMON<input id="pokemon-filter" type="search" placeholder="Pikachu, 25, Bulbasaur"></label>
+          <button id="search-submit" class="primary-button">Buscar / actualizar</button>
+          <p class="search-note" id="search-note">Escribe un nombre en inglés o número y pulsa Buscar. El radio se aplica a esta búsqueda.</p>
         </section>
-        <section class="control-section">
+        <section class="control-section center-section">
           <div class="section-heading"><span>CENTRO DE ANÁLISIS</span><button id="reset-center" class="text-button">Restablecer</button></div>
           <label class="coord-label">LATITUD<input id="center-lat" type="number" step="0.0001" value="39.4699"></label>
           <label class="coord-label">LONGITUD<input id="center-lon" type="number" step="0.0001" value="-0.3763"></label>
           <button id="apply-center" class="secondary-button">Aplicar centro</button>
           <p class="hint">También puedes hacer clic en el mapa para fijar el centro.</p>
         </section>
-      <div class="sidebar-foot"><span>Distancia calculada con Haversine</span><span>Fuente: API de PokéCoords</span><span>Los resultados se vuelven a filtrar por el radio seleccionado.</span></div>
+      <div class="sidebar-foot"><span>Distancia calculada con Haversine</span><span>Feed de spawns: PokéCoords</span><span>Nombres e IDs: PokéAPI</span></div>
       </aside>
       <section class="main-content">
         <div class="stats-row">
-          <article class="stat-card"><div class="stat-label">SPAWNS ACTIVOS</div><div class="stat-value" id="stat-spawns">—</div><div class="stat-note" id="stat-total">Consultando feed</div></article>
+          <article class="stat-card"><div class="stat-label" id="stat-spawns-label">SPAWNS ACTIVOS</div><div class="stat-value" id="stat-spawns">—</div><div class="stat-note" id="stat-total">Consultando feed</div></article>
           <article class="stat-card"><div class="stat-label">HUNDOS ACTIVOS</div><div class="stat-value" id="stat-hundos">—</div><div class="stat-note">IV 100% · ATK 15 · DEF 15 · PS 15</div></article>
-          <article class="stat-card"><div class="stat-label">ESPECIES</div><div class="stat-value" id="stat-species">—</div><div class="stat-note">En el radio seleccionado</div></article>
+          <article class="stat-card"><div class="stat-label">ESPECIES</div><div class="stat-value" id="stat-species">—</div><div class="stat-note" id="stat-species-note">En el radio seleccionado</div></article>
           <article class="stat-card"><div class="stat-label">ÚLTIMA CONSULTA</div><div class="stat-value stat-text" id="stat-updated">—</div><div class="stat-note">Feed en directo</div></article>
         </div>
         <div class="content-grid">
           <section class="map-card">
-            <div class="card-heading"><div><div class="section-title">Mapa de spawns</div><div class="muted" id="map-subtitle">Radio de 25 km alrededor de Valencia</div></div><div class="map-legend"><span><i class="legend-dot heat"></i>Spawn</span><span><i class="legend-ring"></i>Radio elegido</span></div></div>
+            <div class="card-heading"><div><div class="section-title">Mapa de spawns</div><div class="muted" id="map-subtitle">Radio de 25 km alrededor de Valencia</div></div><div class="map-legend"><span><i class="legend-dot heat"></i>Spawn</span><span class="radius-legend"><i class="legend-ring"></i>Radio elegido</span></div></div>
             <div id="map" role="application" aria-label="Mapa interactivo de spawns"></div>
             <div class="map-footer"><span><i class="legend-dot"></i> Centro de análisis · marcador dorado = hundo</span><span id="map-count">0 puntos</span></div>
           </section>

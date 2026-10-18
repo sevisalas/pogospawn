@@ -1,7 +1,7 @@
 const API = 'https://map.pokecoords.com/api';
 const NAME_SEARCH_FILTER_ID = 'f-3s6icymuvdx3io';
 const EARTH_KM = 6371.0088;
-const RADII = new Set([5, 10, 25, 50, 100]);
+const RADII = new Set([5, 10, 25, 50, 100, 150, 200, 250, 300]);
 
 function distanceKm(a, b) {
   const rad = (value) => value * Math.PI / 180;
@@ -36,11 +36,13 @@ module.exports = async function handler(req, res) {
   const lon = Number(req.query.lon);
   const radius = Number(req.query.radius || 25);
   const onlyHundos = req.query.hundos === 'true';
-  const pokemonId = req.query.pokemonId ? Number(req.query.pokemonId) : null;
+  const pokemonIds = req.query.pokemonIds
+    ? String(req.query.pokemonIds).split(',').map((value) => Number(value.trim()))
+    : (req.query.pokemonId ? [Number(req.query.pokemonId)] : []);
   if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180 || !RADII.has(radius)) {
     return res.status(400).json({ error: 'Centro o radio no válido. Radios permitidos: 5, 10, 25, 50 y 100 km.' });
   }
-  if (pokemonId !== null && (!Number.isInteger(pokemonId) || pokemonId < 1 || pokemonId > 2000)) {
+  if (pokemonIds.length > 50 || pokemonIds.some((id) => !Number.isInteger(id) || id < 1 || id > 2000)) {
     return res.status(400).json({ error: 'El número de Pokédex no es válido.' });
   }
 
@@ -50,6 +52,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    const globalHundos = onlyHundos && pokemonIds.length === 0;
     // El HAR contiene este filtro para búsquedas por especie y el filtro
     // permanente para hundos. La combinación de hundos y radio es una inferencia.
     const body = {
@@ -58,11 +61,15 @@ module.exports = async function handler(req, res) {
       max_iv: 100,
       min_lv: onlyHundos ? 0 : 1,
       max_lv: 35,
-      latitude: lat,
-      longitude: lon,
-      range: radius * 1000,
     };
-    if (pokemonId !== null) body.selected_dex = [pokemonId];
+    // PokéCoords' hundo filter is global: its recorded request omits the
+    // location and range. Regional requests use Haversine filtering below.
+    if (!globalHundos) {
+      body.latitude = lat;
+      body.longitude = lon;
+      body.range = radius * 1000;
+    }
+    if (pokemonIds.length) body.selected_dex = [...new Set(pokemonIds)];
 
     const response = await fetch(`${API}/pokemon/worldwide`, {
       method: 'POST',
@@ -85,7 +92,8 @@ module.exports = async function handler(req, res) {
       const rowLon = Number(row.lng);
       if (!Number.isFinite(rowLat) || !Number.isFinite(rowLon)) continue;
       const distance = distanceKm(center, { lat: rowLat, lon: rowLon });
-      if (distance > radius) continue;
+      if (onlyHundos && Number(row.iv) !== 100) continue;
+      if (!globalHundos && distance > radius) continue;
       const key = String(row.id ?? `${row.dex}:${rowLat}:${rowLon}:${row.despawn}`);
       if (!unique.has(key)) unique.set(key, { ...row, distance_km: Number(distance.toFixed(3)) });
     }
@@ -93,6 +101,7 @@ module.exports = async function handler(req, res) {
     const spawns = [...unique.values()];
     return res.status(200).json({
       provider: 'PokéCoords', center, radius_km: radius,
+      scope: globalHundos ? 'global' : 'regional',
       count: spawns.length,
       hundos: spawns.filter((row) => Number(row.iv) === 100).length,
       generated_at: new Date().toISOString(), spawns,
