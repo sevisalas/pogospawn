@@ -60,7 +60,10 @@
   }
 
   function initControls() {
-    $('minimum-level').innerHTML += Array.from({ length: 35 }, (_, index) => `<option value="${index + 1}">Nivel ${index + 1} o más</option>`).join('');
+    $('minimum-level').addEventListener('input', () => {
+      const level = Number($('minimum-level').value);
+      $('minimum-level-value').textContent = level ? `Nivel ${level}+` : 'Cualquier nivel';
+    });
     $('minimum-level').addEventListener('change', loadData);
     $('radius-options').innerHTML = RADII.map((radius) => `<button class="radius-option${radius === state.radius ? ' active' : ''}" data-radius="${radius}" aria-pressed="${radius === state.radius}">${radius}</button>`).join('');
     $('radius-options').addEventListener('click', (event) => {

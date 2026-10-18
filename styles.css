@@ -27,8 +27,10 @@
 .global-search .city-section,.global-search .center-section{display:none}
 .global-search .level-section{display:none}
 .global-search .radius-legend{display:none}
-.coord-label select{display:block;width:100%;height:40px;border:1px solid #e6ebec;border-radius:6px;padding:0 9px;margin-top:5px;background:#fff;color:#34434d;font:15px 'DM Sans',sans-serif;outline:none}
-.coord-label select:focus{border-color:#9ed568}
+.level-section{display:grid;grid-template-columns:1fr auto;align-items:center;gap:5px 10px}
+.level-section label{font:500 11px 'DM Mono',monospace;letter-spacing:.13em;color:#8c9aa1}
+.level-section output{font:600 13px 'DM Sans',sans-serif;color:#416e2c}
+.level-section input[type=range]{grid-column:1/-1;width:100%;height:24px;margin:2px 0 0;accent-color:#78a94a;cursor:pointer}
 .sidebar-foot{font-size:11px}
 .muted{font-size:12px}
 .map-legend{font-size:11px}
