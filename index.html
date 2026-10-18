@@ -16,8 +16,8 @@
     <main class="layout">
       <aside class="sidebar">
         <div class="eyebrow">BUSCADOR DE HUNDOS</div>
-        <h1>Valencia<br><span>· Zaragoza</span></h1>
-        <p class="intro">Localiza spawns activos y hundos con coordenadas del feed en directo.</p>
+        <h1>Valencia <span>· Zaragoza</span></h1>
+        <p class="intro">Spawns y hundos · feed en directo.</p>
         <section class="control-section city-section">
           <div class="section-heading"><span>ZONA DE BÚSQUEDA</span><strong id="city-label">Valencia</strong></div>
           <div class="city-options" id="city-options" aria-label="Seleccionar ciudad"></div>
@@ -34,13 +34,14 @@
           <button id="search-submit" class="primary-button">Buscar / actualizar</button>
           <p class="search-note" id="search-note">Por defecto se buscan hundos globales. Escribe Pokémon para filtrar por radio, nivel y 100% IV.</p>
         </section>
-        <section class="control-section center-section">
-          <div class="section-heading"><span>CENTRO DE ANÁLISIS</span><button id="reset-center" class="text-button">Restablecer</button></div>
+        <details class="control-section center-section">
+          <summary class="section-heading"><span>CENTRO MANUAL</span><span class="disclosure-mark">Editar⌄</span></summary>
           <label class="coord-label">LATITUD<input id="center-lat" type="number" step="0.0001" value="39.4699"></label>
           <label class="coord-label">LONGITUD<input id="center-lon" type="number" step="0.0001" value="-0.3763"></label>
           <button id="apply-center" class="secondary-button">Aplicar centro</button>
+          <button id="reset-center" class="text-button">Restablecer ciudad</button>
           <p class="hint">También puedes hacer clic en el mapa para fijar el centro.</p>
-        </section>
+        </details>
       <div class="sidebar-foot"><span>Distancia calculada con Haversine</span><span>Feed de spawns: PokéCoords</span><span>Nombres e IDs: PokéAPI</span></div>
       </aside>
       <section class="main-content">
