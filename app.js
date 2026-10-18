@@ -19,7 +19,7 @@
     return 6371.0088 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   };
   const safe = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const speciesName = (id) => `Pokémon #${id}`;
+  const speciesName = (id, name) => name || `Pokémon #${id}`;
   const fmtTime = (value) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -31,13 +31,17 @@
   const toast = (message) => { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3500); };
 
   function normalize(row) {
-    const lat = num(row.lat), lon = num(row.lon), id = Number(row.pokemon_id);
+    const lat = num(row.lat), lon = num(row.lng), id = Number(row.dex);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    const rawDespawn = row.despawn;
+    const expiry = typeof rawDespawn === 'number' || /^\d+$/.test(String(rawDespawn ?? ''))
+      ? new Date(Number(rawDespawn) < 1e12 ? Number(rawDespawn) * 1000 : Number(rawDespawn)).toISOString()
+      : rawDespawn || null;
     return {
-      id: String(row.id ?? `${id}-${lat}-${lon}-${row.expires_at}`), pokemonId: id, species: speciesName(id), lat, lon,
-      cp: Number(row.cp) || 0, level: Number(row.level) || 0, iv: Number(row.percent_iv) || 0,
-      atk: Number(row.attack_iv) || 0, def: Number(row.defense_iv) || 0, sta: Number(row.stamina_iv) || 0,
-      expiresAt: row.expires_at || null, original: row,
+      id: String(row.id ?? `${id}-${lat}-${lon}-${rawDespawn}`), pokemonId: id, species: speciesName(id, row.name), lat, lon,
+      cp: Number(row.cp) || 0, level: Number(row.level) || 0, iv: Number(row.iv) || 0,
+      atk: Number(row.attack) || 0, def: Number(row.defense) || 0, sta: Number(row.stamina) || 0,
+      expiresAt: expiry, original: row,
     };
   }
 
@@ -65,7 +69,7 @@
       setCenter(city.lat, city.lon, true, city.key); loadData();
     });
     $('refresh').addEventListener('click', loadData);
-    $('only-hundos').addEventListener('change', render);
+    $('only-hundos').addEventListener('change', loadData);
     $('pokemon-filter').addEventListener('input', render);
   }
 
@@ -106,17 +110,22 @@
     if (state.loading) return;
     state.loading = true; $('data-status').textContent = 'Consultando feed en directo…';
     try {
-      const params = new URLSearchParams({ lat: String(state.center.lat), lon: String(state.center.lon), radius: String(state.radius) });
+      const params = new URLSearchParams({
+        lat: String(state.center.lat), lon: String(state.center.lon), radius: String(state.radius),
+        hundos: String($('only-hundos').checked),
+      });
+      const search = $('pokemon-filter').value.trim().replace(/^#/, '');
+      if (/^\d+$/.test(search)) params.set('pokemonId', search);
       const response = await fetch(`/api/spawns?${params}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ? `${data.error} ${data.detail}` : (data.error || `Error ${response.status}`));
       state.rawRows = (data.spawns || []).map(normalize).filter(Boolean);
       state.lastUpdated = data.generated_at;
       const count = state.rawRows.length, hundos = state.rawRows.filter((row) => row.iv === 100).length;
-      $('data-status').textContent = `${count.toLocaleString('es-ES')} spawns · ${hundos} hundos`;
+      $('data-status').textContent = `${count.toLocaleString('es-ES')} resultados · ${hundos} hundos`;
       document.querySelector('.live-dot').style.background = '#79bd43';
       document.querySelector('.live-dot').style.boxShadow = '0 0 0 3px #e8f5dc';
-      $('stat-total').textContent = `${data.tile_count} consultas de cobertura · ${state.radius} km`;
+      $('stat-total').textContent = `${data.count.toLocaleString('es-ES')} resultados recibidos · ${state.radius} km`;
       $('stat-updated').textContent = fmtTime(data.generated_at);
       render();
     } catch (error) {
@@ -138,7 +147,8 @@
     const query = $('pokemon-filter').value.trim().replace(/^#/, '').toLowerCase();
     const onlyHundos = $('only-hundos').checked;
     state.rows = state.rawRows.map((row) => ({ ...row, distance: distanceKm(state.center, row) }))
-      .filter((row) => row.distance <= state.radius && (!onlyHundos || row.iv === 100) && (!query || String(row.pokemonId).includes(query)));
+      .filter((row) => row.distance <= state.radius && (!onlyHundos || row.iv === 100)
+        && (!query || String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query)));
     const activeCity = CITIES.find((item) => item.key === state.activeCity);
     $('radius-label').textContent = `${state.radius} km`;
     $('map-subtitle').textContent = `Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
