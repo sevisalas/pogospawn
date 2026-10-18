@@ -8,7 +8,7 @@
   const state = {
     center: { lat: HOME.lat, lon: HOME.lon }, activeCity: HOME.key, resetCity: HOME.key, radius: 25,
     rawRows: [], rows: [], map: null, heat: null, markers: null, centerMarker: null, radiusCircle: null,
-    lastUpdated: null, loading: false,
+    lastUpdated: null, loading: false, searchIds: [],
   };
   const $ = (id) => document.getElementById(id);
   const num = (v) => typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'));
@@ -29,6 +29,7 @@
     return `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s`;
   };
   const toast = (message) => { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3500); };
+  const searchTerms = (value) => value.split(/[,;\n]+/).map((term) => term.trim()).filter(Boolean);
 
   async function resolvePokemonId(value) {
     const term = value.trim().replace(/^#/, '');
@@ -84,7 +85,7 @@
     $('refresh').addEventListener('click', loadData);
     $('search-submit').addEventListener('click', loadData);
     $('only-hundos').addEventListener('change', loadData);
-    $('pokemon-filter').addEventListener('input', render);
+    $('pokemon-filter').addEventListener('input', () => { state.searchIds = []; render(); });
     $('pokemon-filter').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadData(); });
   }
 
@@ -131,11 +132,13 @@
         lat: String(state.center.lat), lon: String(state.center.lon), radius: String(state.radius),
         hundos: String($('only-hundos').checked),
       });
-      const search = $('pokemon-filter').value.trim();
-      if (search && !$('only-hundos').checked) {
+      const terms = searchTerms($('pokemon-filter').value);
+      state.searchIds = [];
+      if (terms.length) {
         $('search-submit').disabled = true;
         $('search-submit').textContent = 'Buscando Pokémon…';
-        params.set('pokemonId', String(await resolvePokemonId(search)));
+        state.searchIds = [...new Set(await Promise.all(terms.map(resolvePokemonId)))];
+        if (!$('only-hundos').checked) params.set('pokemonIds', state.searchIds.join(','));
       }
       const response = await fetch(`/api/spawns?${params}`, { cache: 'no-store' });
       const data = await response.json();
@@ -169,7 +172,7 @@
   }
 
   function render() {
-    const query = $('pokemon-filter').value.trim().replace(/^#/, '').toLowerCase();
+    const queries = searchTerms($('pokemon-filter').value).map((term) => term.replace(/^#/, '').toLowerCase());
     const onlyHundos = $('only-hundos').checked;
     document.body.classList.toggle('global-search', onlyHundos);
     document.querySelector('.city-section').hidden = onlyHundos;
@@ -177,12 +180,12 @@
     document.querySelector('.radius-legend').hidden = onlyHundos;
     state.rows = state.rawRows.map((row) => ({ ...row, distance: distanceKm(state.center, row) }))
       .filter((row) => (onlyHundos || row.distance <= state.radius) && (!onlyHundos || row.iv === 100)
-        && (!query || String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query)));
+        && (!queries.length || queries.some((query) => String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query) || state.searchIds.includes(row.pokemonId))));
     const activeCity = CITIES.find((item) => item.key === state.activeCity);
     $('radius-label').textContent = onlyHundos ? 'Global' : `${state.radius} km`;
     $('radius-options').classList.toggle('disabled', onlyHundos);
     $('radius-note').textContent = onlyHundos ? 'Los hundos se buscan globalmente; el radio no se aplica.' : 'Radio aplicado a la búsqueda por Pokémon (hasta 300 km).';
-    $('search-note').textContent = onlyHundos ? 'PokéCoords devuelve hundos globales (hasta 100 resultados por consulta). El radio y el centro no limitan esta búsqueda.' : 'Escribe un nombre en inglés o número de Pokédex y pulsa Buscar. El radio se aplica a esta búsqueda.';
+    $('search-note').textContent = onlyHundos ? 'PokéCoords devuelve hundos globales (hasta 100 resultados por consulta). El radio y el centro no limitan esta búsqueda.' : 'Puedes separar varios nombres en inglés o números de Pokédex con comas. Sin filtro se muestran hasta 100 resultados de PokéCoords.';
     $('map-subtitle').textContent = onlyHundos ? `Búsqueda global · ${state.rows.length} hundos recibidos` : `Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
     $('stat-spawns-label').textContent = onlyHundos ? 'HUNDOS GLOBALES' : 'SPAWNS EN EL RADIO';
     $('stat-species-note').textContent = onlyHundos ? 'En resultados globales' : 'En el radio seleccionado';
