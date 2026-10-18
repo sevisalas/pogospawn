@@ -1,4 +1,5 @@
 const API = 'https://map.pokecoords.com/api';
+const NAME_SEARCH_FILTER_ID = 'f-3s6icymuvdx3io';
 const EARTH_KM = 6371.0088;
 const RADII = new Set([5, 10, 25, 50, 100]);
 
@@ -22,14 +23,6 @@ function credentials() {
     'Content-Type': 'application/json',
     'x-language': 'en',
   };
-}
-
-async function readFeed(headers) {
-  const response = await fetch(`${API}/feed/`, { headers });
-  if (!response.ok) throw new Error(`Lectura de configuración PokéCoords: HTTP ${response.status}.`);
-  const feed = await response.json();
-  const entries = Array.isArray(feed) ? feed : [];
-  return entries.find((item) => item && typeof item.filter_id === 'string') || null;
 }
 
 module.exports = async function handler(req, res) {
@@ -57,15 +50,10 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const savedFilter = onlyHundos ? null : await readFeed(headers);
-    if (!onlyHundos && !savedFilter) {
-      return res.status(502).json({ error: 'PokéCoords no devolvió una configuración de búsqueda.' });
-    }
-
-    // La petición reproduce los campos geográficos observados en el HAR.
-    // Para el modo hundo se combina el filtro permanente de 100% con ese ámbito.
+    // El HAR contiene este filtro para búsquedas por especie y el filtro
+    // permanente para hundos. La combinación de hundos y radio es una inferencia.
     const body = {
-      filter_id: onlyHundos ? 'permanent_100iv_filter' : savedFilter.filter_id,
+      filter_id: onlyHundos ? 'permanent_100iv_filter' : NAME_SEARCH_FILTER_ID,
       min_iv: onlyHundos ? 100 : 0,
       max_iv: 100,
       min_lv: onlyHundos ? 0 : 1,
