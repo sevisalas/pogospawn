@@ -8,7 +8,7 @@
   const state = {
     center: { lat: HOME.lat, lon: HOME.lon }, activeCity: HOME.key, resetCity: HOME.key, radius: 25,
     rawRows: [], rows: [], map: null, heat: null, markers: null, centerMarker: null, radiusCircle: null,
-    lastUpdated: null, loading: false, reloadQueued: false, searchIds: [], globalHundos: true,
+    lastUpdated: null, loading: false, reloadQueued: false, searchIds: [], globalHundos: true, sortMode: 'distance',
   };
   const $ = (id) => document.getElementById(id);
   const num = (v) => typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'));
@@ -65,13 +65,19 @@
       $('minimum-level-value').textContent = level ? `Nivel ${level}+` : 'Cualquier nivel';
     });
     $('minimum-level').addEventListener('change', loadData);
-    $('radius-options').innerHTML = RADII.map((radius) => `<button class="radius-option${radius === state.radius ? ' active' : ''}" data-radius="${radius}" aria-pressed="${radius === state.radius}">${radius}</button>`).join('');
-    $('radius-options').addEventListener('click', (event) => {
-      const button = event.target.closest('[data-radius]'); if (!button) return;
-      state.radius = Number(button.dataset.radius);
-      document.querySelectorAll('.radius-option').forEach((b) => { const active = b === button; b.classList.toggle('active', active); b.setAttribute('aria-pressed', String(active)); });
-      $('radius-label').textContent = `${state.radius} km`; fitRadius(); loadData();
+    $('radius-range').max = String(RADII.length - 1);
+    $('radius-range').value = String(Math.max(0, RADII.indexOf(state.radius)));
+    $('radius-range').addEventListener('input', () => {
+      state.radius = RADII[Number($('radius-range').value)];
+      $('radius-label').textContent = `${state.radius} km`;
+      $('radius-range').setAttribute('aria-valuetext', `${state.radius} kilómetros`);
+      fitRadius(); render();
     });
+    $('radius-range').addEventListener('change', loadData);
+    document.querySelectorAll('.sort-option').forEach((button) => button.addEventListener('click', () => {
+      state.sortMode = button.dataset.sort;
+      render();
+    }));
     $('city-options').innerHTML = CITIES.map((city) => `<button class="city-option${city.key === state.activeCity ? ' active' : ''}" data-city="${city.key}" aria-pressed="${city.key === state.activeCity}">${safe(city.name)}</button>`).join('');
     $('city-options').addEventListener('click', (event) => {
       const button = event.target.closest('[data-city]'); if (!button) return;
@@ -198,6 +204,11 @@
     if (globalHundos) $('only-hundos').checked = true;
     const onlyHundos = globalHundos || $('only-hundos').checked;
     const minimumLevel = Number($('minimum-level').value) || 0;
+    document.querySelectorAll('.sort-option').forEach((button) => {
+      const active = button.dataset.sort === state.sortMode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
     document.body.classList.toggle('global-search', globalHundos);
     document.querySelector('.city-section').hidden = globalHundos;
     document.querySelector('.center-section').hidden = globalHundos;
@@ -210,6 +221,7 @@
     $('only-hundos').disabled = globalHundos;
     $('radius-label').textContent = globalHundos ? 'Global' : `${state.radius} km`;
     $('radius-options').classList.toggle('disabled', globalHundos);
+    $('radius-range').disabled = globalHundos;
     $('radius-note').textContent = globalHundos ? 'La búsqueda inicial de hundos es global.' : 'Radio aplicado a la búsqueda por Pokémon (hasta 300 km).';
     $('search-note').textContent = globalHundos ? 'Hundos globales. Escribe Pokémon para buscar en tu radio.' : `Varios nombres con comas · Nivel mínimo: ${minimumLevel || 'cualquiera'}.`;
     $('map-subtitle').textContent = globalHundos ? `Hundos globales · ${state.rows.length} resultados recibidos` : `${onlyHundos ? 'Solo 100% IV · ' : ''}Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
@@ -232,7 +244,10 @@
         marker.bindPopup(popup(row), { maxWidth: 250 }); marker.addTo(state.markers);
       });
     }
-    $('spawn-list').innerHTML = state.rows.length ? state.rows.slice().sort((a, b) => b.iv - a.iv || new Date(a.expiresAt) - new Date(b.expiresAt)).slice(0, 250).map((row) => {
+    const sortedRows = state.rows.slice().sort((a, b) => state.sortMode === 'level'
+      ? b.level - a.level || a.distance - b.distance || b.iv - a.iv
+      : a.distance - b.distance || b.level - a.level || b.iv - a.iv);
+    $('spawn-list').innerHTML = state.rows.length ? sortedRows.slice(0, 250).map((row) => {
       const hundo = row.iv === 100;
       return `<button class="spawn-row${hundo ? ' hundo' : ''}" data-spawn="${safe(row.id)}"><span class="spawn-sprite">${hundo ? '💯' : `#${row.pokemonId}`}</span><span class="spawn-info"><strong>${safe(row.species)}${hundo ? ' · HUNDO' : ''}</strong><small>IV ${row.iv.toFixed(2)}% · CP ${row.cp} · Nv. ${row.level}</small><small>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)} · expira ${safe(timeLeft(row.expiresAt))}</small></span><span class="spawn-distance">${onlyHundos ? 'Global' : `${row.distance.toFixed(1)} km`}</span></button>`;
     }).join('') : `<div class="empty-state">${state.loading ? 'Consultando el feed…' : (onlyHundos ? 'PokéCoords no devolvió hundos globales en esta consulta.' : 'No hay spawns en el radio seleccionado.')}</div>`;

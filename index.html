@@ -24,7 +24,7 @@
         </section>
         <section class="control-section">
           <div class="section-heading"><span>RADIO DE ANÁLISIS</span><strong id="radius-label">25 km</strong></div>
-          <div class="radius-options" id="radius-options" aria-label="Seleccionar radio"></div>
+          <div class="radius-options" id="radius-options" aria-label="Seleccionar radio"><input id="radius-range" type="range" min="0" max="8" step="1" value="2" aria-label="Radio en kilómetros"></div>
           <div class="range-track"><span id="radius-note">Radio aplicado a la búsqueda por Pokémon (hasta 300 km).</span></div>
         </section>
         <section class="control-section search-section">
@@ -58,7 +58,8 @@
             <div class="map-footer"><span><i class="legend-dot"></i> Centro de análisis · marcador dorado = hundo</span><span id="map-count">0 puntos</span></div>
           </section>
           <section class="ranking-card spawn-list-card">
-            <div class="card-heading"><div><div class="section-title">Spawns activos</div><div class="muted">Ordenados por IV · selecciona uno para centrar el mapa</div></div><span class="rank-icon">↗</span></div>
+            <div class="card-heading"><div><div class="section-title">Spawns activos</div><div class="muted">Selecciona uno para centrar el mapa</div></div><span class="rank-icon">↗</span></div>
+            <div class="sort-controls" aria-label="Ordenar resultados"><span>Ordenar:</span><button type="button" class="sort-option active" data-sort="distance" aria-pressed="true">Más cercanos</button><button type="button" class="sort-option" data-sort="level" aria-pressed="false">Nivel más alto</button></div>
             <div id="spawn-list" class="spawn-list"><div class="empty-state">Consultando el feed</div></div>
           </section>
         </div>
