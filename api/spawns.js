@@ -36,11 +36,13 @@ module.exports = async function handler(req, res) {
   const lon = Number(req.query.lon);
   const radius = Number(req.query.radius || 25);
   const onlyHundos = req.query.hundos === 'true';
-  const pokemonId = req.query.pokemonId ? Number(req.query.pokemonId) : null;
+  const pokemonIds = req.query.pokemonIds
+    ? String(req.query.pokemonIds).split(',').map((value) => Number(value.trim()))
+    : (req.query.pokemonId ? [Number(req.query.pokemonId)] : []);
   if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180 || !RADII.has(radius)) {
     return res.status(400).json({ error: 'Centro o radio no válido. Radios permitidos: 5, 10, 25, 50 y 100 km.' });
   }
-  if (pokemonId !== null && (!Number.isInteger(pokemonId) || pokemonId < 1 || pokemonId > 2000)) {
+  if (pokemonIds.length > 50 || pokemonIds.some((id) => !Number.isInteger(id) || id < 1 || id > 2000)) {
     return res.status(400).json({ error: 'El número de Pokédex no es válido.' });
   }
 
@@ -66,7 +68,7 @@ module.exports = async function handler(req, res) {
       body.longitude = lon;
       body.range = radius * 1000;
     }
-    if (pokemonId !== null) body.selected_dex = [pokemonId];
+    if (!onlyHundos && pokemonIds.length) body.selected_dex = [...new Set(pokemonIds)];
 
     const response = await fetch(`${API}/pokemon/worldwide`, {
       method: 'POST',
