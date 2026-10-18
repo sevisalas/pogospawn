@@ -1,55 +1,103 @@
-const env = (name, fallback) => process.env[name] || fallback;
+const API = 'https://map.pokecoords.com/api';
+const NAME_SEARCH_FILTER_ID = 'f-3s6icymuvdx3io';
+const EARTH_KM = 6371.0088;
+const RADII = new Set([5, 10, 25, 50, 100]);
+
+function distanceKm(a, b) {
+  const rad = (value) => value * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_KM * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function credentials() {
+  const bearer = process.env.POKECOORDS_BEARER_TOKEN;
+  const session = process.env.POKECOORDS_SESSION_TOKEN;
+  if (!bearer || !session) return null;
+  return {
+    Authorization: `Bearer ${bearer}`,
+    Cookie: `session_token=${session}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    'x-language': 'en',
+  };
+}
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ error: 'Método no permitido.' });
   }
 
-  const base = env('BASEROW_URL', 'https://api.baserow.io').replace(/\/$/, '');
-  const token = process.env.BASEROW_TOKEN;
-  const table = process.env.BASEROW_TABLE_ID;
-  if (!token || !table) {
-    return res.status(503).json({
-      error: 'Falta configurar BASEROW_TOKEN o BASEROW_TABLE_ID en las variables de entorno de Vercel.',
-      configured: false,
-    });
+  const lat = Number(req.query.lat);
+  const lon = Number(req.query.lon);
+  const radius = Number(req.query.radius || 25);
+  const onlyHundos = req.query.hundos === 'true';
+  const pokemonId = req.query.pokemonId ? Number(req.query.pokemonId) : null;
+  if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180 || !RADII.has(radius)) {
+    return res.status(400).json({ error: 'Centro o radio no válido. Radios permitidos: 5, 10, 25, 50 y 100 km.' });
+  }
+  if (pokemonId !== null && (!Number.isInteger(pokemonId) || pokemonId < 1 || pokemonId > 2000)) {
+    return res.status(400).json({ error: 'El número de Pokédex no es válido.' });
+  }
+
+  const headers = credentials();
+  if (!headers) {
+    return res.status(503).json({ error: 'Falta configurar el acceso de PokéCoords en Vercel.' });
   }
 
   try {
-    const rows = [];
-    let url = `${base}/api/database/rows/table/${encodeURIComponent(table)}/?user_field_names=true&size=200`;
-    let pageCount = 0;
-    while (url && pageCount < 100) {
-      const response = await fetch(url, {
-        headers: { Authorization: `Token ${token}`, Accept: 'application/json' },
-      });
-      if (!response.ok) {
-        const detail = (await response.text()).slice(0, 500);
-        return res.status(response.status === 401 || response.status === 403 ? 502 : response.status)
-          .json({ error: `Baserow respondió ${response.status}.`, detail });
-      }
-      const page = await response.json();
-      if (!Array.isArray(page.results)) throw new Error('Respuesta de filas no reconocida.');
-      rows.push(...page.results);
-      url = page.next || null;
-      pageCount += 1;
+    // El HAR contiene este filtro para búsquedas por especie y el filtro
+    // permanente para hundos. La combinación de hundos y radio es una inferencia.
+    const body = {
+      filter_id: onlyHundos ? 'permanent_100iv_filter' : NAME_SEARCH_FILTER_ID,
+      min_iv: onlyHundos ? 100 : 0,
+      max_iv: 100,
+      min_lv: onlyHundos ? 0 : 1,
+      max_lv: 35,
+      latitude: lat,
+      longitude: lon,
+      range: radius * 1000,
+    };
+    if (pokemonId !== null) body.selected_dex = [pokemonId];
+
+    const response = await fetch(`${API}/pokemon/worldwide`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const detail = response.status === 401 || response.status === 403
+        ? 'La sesión de PokéCoords ha caducado o no tiene acceso.'
+        : `PokéCoords respondió HTTP ${response.status}.`;
+      return res.status(response.status === 401 || response.status === 403 ? 502 : response.status).json({ error: detail });
     }
-    if (url) return res.status(502).json({ error: 'La tabla supera el límite de paginación (20.000 filas).' });
+
+    const rows = await response.json();
+    if (!Array.isArray(rows)) return res.status(502).json({ error: 'PokéCoords devolvió una respuesta inesperada.' });
+    const center = { lat, lon };
+    const unique = new Map();
+    for (const row of rows) {
+      const rowLat = Number(row.lat);
+      const rowLon = Number(row.lng);
+      if (!Number.isFinite(rowLat) || !Number.isFinite(rowLon)) continue;
+      const distance = distanceKm(center, { lat: rowLat, lon: rowLon });
+      if (distance > radius) continue;
+      const key = String(row.id ?? `${row.dex}:${rowLat}:${rowLon}:${row.despawn}`);
+      if (!unique.has(key)) unique.set(key, { ...row, distance_km: Number(distance.toFixed(3)) });
+    }
+
+    const spawns = [...unique.values()];
     return res.status(200).json({
-      rows,
-      count: rows.length,
-      configured: true,
-      fields: {
-        lat: env('BASEROW_LAT_FIELD', 'latitude'),
-        lon: env('BASEROW_LON_FIELD', 'longitude'),
-        species: env('BASEROW_SPECIES_FIELD', 'species'),
-        time: env('BASEROW_TIME_FIELD', 'timestamp'),
-        name: env('BASEROW_NAME_FIELD', 'name'),
-      },
+      provider: 'PokéCoords', center, radius_km: radius,
+      count: spawns.length,
+      hundos: spawns.filter((row) => Number(row.iv) === 100).length,
+      generated_at: new Date().toISOString(), spawns,
     });
   } catch (error) {
-    return res.status(502).json({ error: 'No se pudo leer Baserow.', detail: error.message });
+    return res.status(502).json({ error: 'No se pudo consultar el feed de PokéCoords.', detail: error.message });
   }
 };
