@@ -8,7 +8,7 @@
   const state = {
     center: { lat: HOME.lat, lon: HOME.lon }, activeCity: HOME.key, resetCity: HOME.key, radius: 25,
     rawRows: [], rows: [], map: null, heat: null, markers: null, centerMarker: null, radiusCircle: null,
-    lastUpdated: null, loading: false, searchIds: [],
+    lastUpdated: null, loading: false, reloadQueued: false, searchIds: [],
   };
   const $ = (id) => document.getElementById(id);
   const num = (v) => typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'));
@@ -125,7 +125,7 @@
   }
 
   async function loadData() {
-    if (state.loading) return;
+    if (state.loading) { state.reloadQueued = true; return; }
     state.loading = true; $('data-status').textContent = 'Consultando feed en directo…';
     try {
       const params = new URLSearchParams({
@@ -163,7 +163,10 @@
       $('search-submit').textContent = 'Buscar / actualizar';
       $('search-submit').disabled = false;
       toast(error.message);
-    } finally { state.loading = false; }
+    } finally {
+      state.loading = false;
+      if (state.reloadQueued) { state.reloadQueued = false; loadData(); }
+    }
   }
 
   function popup(row) {
