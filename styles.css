@@ -7,3 +7,35 @@
 .city-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.city-option{padding:9px 8px;border:1px solid #e4e9e9;border-radius:7px;background:#fff;color:#687982;font-size:11px;font-weight:500;font-family:DM Sans,sans-serif;cursor:pointer}.city-option.active{background:#ecf8df;border-color:#b9e992;color:#365728}.city-option:focus-visible{outline:2px solid #85b755;outline-offset:2px}
 .toggle-label{display:flex;gap:8px;align-items:center;font-size:11px;color:#45565f;cursor:pointer}.toggle-label input{accent-color:#78a94a}.spawn-list-card{max-height:500px;overflow:hidden}.spawn-list{overflow:auto;padding:4px 12px 12px;flex:1}.spawn-row{display:flex;width:100%;gap:10px;align-items:center;padding:10px 2px;border:0;border-bottom:1px solid #edf0f0;background:#fff;text-align:left;color:#34434c;cursor:pointer}.spawn-row:hover{background:#f8fbf5}.spawn-row.hundo{background:#fffaf0}.spawn-sprite{width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:grid;place-items:center;background:#edf6e8;color:#527d34;font:9px 'DM Mono',monospace}.spawn-row.hundo .spawn-sprite{background:#ffedb6;font-size:15px}.spawn-info{display:grid;gap:3px;min-width:0;flex:1}.spawn-info strong{font-size:10px}.spawn-info small{font-size:8px;color:#87959a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.spawn-distance{font:9px 'DM Mono',monospace;color:#839198;white-space:nowrap}
 .content-grid .map-card{grid-row:auto}
+
+/* Larger controls and readable copy for everyday use. */
+.layout{grid-template-columns:320px minmax(0,1fr)}
+.eyebrow,.section-heading,.stat-label,.coord-label{font-size:11px}
+.intro{font-size:15px}
+.section-heading strong{font-size:14px}
+.city-option{font-size:13px;padding:10px 8px}
+.radius-options{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.radius-option{padding:10px 4px;font-size:13px}
+.radius-options.disabled{opacity:.42;pointer-events:none}
+.range-track,.search-note,.hint{font-size:12px;line-height:1.45}
+.toggle-label{font-size:14px;line-height:1.4}
+.coord-label input{height:40px;font-size:15px}
+.primary-button{width:100%;min-height:44px;margin-top:9px;padding:10px 12px;border:0;border-radius:8px;background:#416e2c;color:#fff;font:600 14px 'DM Sans',sans-serif;cursor:pointer}
+.primary-button:hover{background:#31551f}
+.primary-button:disabled{opacity:.6;cursor:wait}
+.search-note{margin:8px 0 0;color:#697981}
+.sidebar-foot{font-size:11px}
+.muted{font-size:12px}
+.map-legend{font-size:11px}
+.stat-label{font-size:10px}
+.stat-note{font-size:11px}
+.section-title{font-size:16px}
+.map-footer{font-size:11px}
+.spawn-info strong{font-size:13px}
+.spawn-info small{font-size:11px}
+.spawn-distance{font-size:11px}
+.spawn-sprite{width:38px;height:38px;flex-basis:38px;font-size:11px}
+.empty-state{font-size:13px}
+.toast{font-size:13px;padding:11px 15px}
+@media(max-width:1050px){.layout{grid-template-columns:280px minmax(0,1fr)}}
+@media(max-width:800px){.layout{display:block}.sidebar{padding:20px}.sidebar h1{font-size:26px}.intro{font-size:14px}.main-content{padding:13px}.content-grid{grid-template-columns:1fr}.map-card{grid-row:auto;grid-column:1}.ranking-card{grid-row:auto}.stats-row{grid-template-columns:repeat(2,1fr)}#map{height:360px}}
