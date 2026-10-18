@@ -4,24 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#101a24" />
-    <title>POGO — Explorador de spawns Valencia</title>
+    <title>POGO — Buscador Valencia y Zaragoza</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="topbar">
       <a class="brand" href="#"><span class="brand-mark">P</span><span>POGO <small>FIELD ATLAS</small></span></a>
-      <div class="top-meta"><span class="live-dot"></span><span id="data-status">Conectando con Baserow…</span><button id="refresh" class="icon-button" title="Actualizar datos" aria-label="Actualizar datos">↻</button></div>
+      <div class="top-meta"><span class="live-dot"></span><span id="data-status">Conectando con el feed…</span><button id="refresh" class="icon-button" title="Actualizar spawns" aria-label="Actualizar spawns">↻</button></div>
     </header>
     <main class="layout">
       <aside class="sidebar">
-        <div class="eyebrow">ANÁLISIS DE SPAWNS</div>
-        <h1>Valencia<br><span>Field Atlas</span></h1>
-        <p class="intro">Explora actividad, diversidad y ritmo horario alrededor de tu punto de análisis.</p>
+        <div class="eyebrow">BUSCADOR DE HUNDOS</div>
+        <h1>Valencia<br><span>· Zaragoza</span></h1>
+        <p class="intro">Localiza spawns activos y hundos con coordenadas del feed en directo.</p>
+        <section class="control-section city-section">
+          <div class="section-heading"><span>ZONA DE BÚSQUEDA</span><strong id="city-label">Valencia</strong></div>
+          <div class="city-options" id="city-options" aria-label="Seleccionar ciudad"></div>
+        </section>
         <section class="control-section">
-          <div class="section-heading"><span>RADIO DE ANÁLISIS</span><strong id="radius-label">100 km</strong></div>
+          <div class="section-heading"><span>RADIO DE ANÁLISIS</span><strong id="radius-label">25 km</strong></div>
           <div class="radius-options" id="radius-options" aria-label="Seleccionar radio"></div>
           <div class="range-track"><span>Solo se incluyen spawns dentro del radio seleccionado.</span></div>
+        </section>
+        <section class="control-section">
+          <label class="toggle-label"><input id="only-hundos" type="checkbox"><span>Mostrar solo hundos (100% IV)</span></label>
+          <label class="coord-label">POKÉMON<input id="pokemon-filter" type="search" placeholder="Filtrar por número de Pokédex"></label>
         </section>
         <section class="control-section">
           <div class="section-heading"><span>CENTRO DE ANÁLISIS</span><button id="reset-center" class="text-button">Restablecer</button></div>
@@ -30,35 +38,24 @@
           <button id="apply-center" class="secondary-button">Aplicar centro</button>
           <p class="hint">También puedes hacer clic en el mapa para fijar el centro.</p>
         </section>
-        <section class="control-section zones-section">
-          <div class="section-heading"><span>ZONAS PREDEFINIDAS</span><span class="muted">13</span></div>
-          <div class="zone-list" id="zone-list"></div>
-        </section>
-        <div class="sidebar-foot"><span>Distancia calculada con Haversine</span><span>Centro inicial · 39.4699, −0.3763</span></div>
+        <div class="sidebar-foot"><span>Distancia calculada con Haversine</span><span>Feed público iFlowGo PoGo Radar</span><span>El feed limita cada consulta a 25 km; radios mayores se cubren con consultas contiguas.</span></div>
       </aside>
       <section class="main-content">
         <div class="stats-row">
-          <article class="stat-card"><div class="stat-label">SPAWNS EN RADIO</div><div class="stat-value" id="stat-spawns">—</div><div class="stat-note" id="stat-total">Cargando registros</div></article>
-          <article class="stat-card"><div class="stat-label">ESPECIES</div><div class="stat-value" id="stat-species">—</div><div class="stat-note">Diversidad observada</div></article>
-          <article class="stat-card"><div class="stat-label">HORA PICO</div><div class="stat-value" id="stat-peak">—</div><div class="stat-note" id="stat-peak-note">Registros por hora local</div></article>
-          <article class="stat-card"><div class="stat-label">ZONA LÍDER</div><div class="stat-value stat-text" id="stat-leader">—</div><div class="stat-note">Según el ranking visible</div></article>
+          <article class="stat-card"><div class="stat-label">SPAWNS ACTIVOS</div><div class="stat-value" id="stat-spawns">—</div><div class="stat-note" id="stat-total">Consultando feed</div></article>
+          <article class="stat-card"><div class="stat-label">HUNDOS ACTIVOS</div><div class="stat-value" id="stat-hundos">—</div><div class="stat-note">IV 100% · ATK 15 · DEF 15 · PS 15</div></article>
+          <article class="stat-card"><div class="stat-label">ESPECIES</div><div class="stat-value" id="stat-species">—</div><div class="stat-note">En el radio seleccionado</div></article>
+          <article class="stat-card"><div class="stat-label">ÚLTIMA CONSULTA</div><div class="stat-value stat-text" id="stat-updated">—</div><div class="stat-note">Feed en directo</div></article>
         </div>
         <div class="content-grid">
           <section class="map-card">
-            <div class="card-heading"><div><div class="section-title">Mapa de actividad</div><div class="muted" id="map-subtitle">Radio de 100 km alrededor de Valencia</div></div><div class="map-legend"><span><i class="legend-dot heat"></i>Heatmap</span><span><i class="legend-ring"></i>Radio máximo</span></div></div>
+            <div class="card-heading"><div><div class="section-title">Mapa de spawns</div><div class="muted" id="map-subtitle">Radio de 25 km alrededor de Valencia</div></div><div class="map-legend"><span><i class="legend-dot heat"></i>Spawn</span><span><i class="legend-ring"></i>Radio elegido</span></div></div>
             <div id="map" role="application" aria-label="Mapa interactivo de spawns"></div>
-            <div class="map-footer"><span><i class="legend-dot"></i> Centro de análisis</span><span id="map-count">0 puntos</span></div>
+            <div class="map-footer"><span><i class="legend-dot"></i> Centro de análisis · marcador dorado = hundo</span><span id="map-count">0 puntos</span></div>
           </section>
-          <section class="ranking-card">
-            <div class="card-heading"><div><div class="section-title">Ranking de zonas</div><div class="muted">Basado en spawns dentro del radio</div></div><span class="rank-icon">↗</span></div>
-            <div class="ranking-head"><span>ZONA</span><span>SPAWNS</span><span>ESPECIES</span><span>ÍNDICE</span></div>
-            <div id="ranking-list" class="ranking-list"><div class="empty-state">Esperando datos de Baserow</div></div>
-            <div class="ranking-note">Índice equilibrado: ⅓ volumen de spawns + ⅓ diversidad + ⅓ cobertura de horas activas. Escala relativa a las zonas mostradas.</div>
-          </section>
-          <section class="activity-card">
-            <div class="card-heading"><div><div class="section-title">Frecuencia horaria</div><div class="muted">Distribución de registros · hora local</div></div></div>
-            <div id="hour-chart" class="hour-chart"><div class="empty-state">Sin datos horarios todavía</div></div>
-            <div class="chart-axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23 h</span></div>
+          <section class="ranking-card spawn-list-card">
+            <div class="card-heading"><div><div class="section-title">Spawns activos</div><div class="muted">Ordenados por IV · selecciona uno para centrar el mapa</div></div><span class="rank-icon">↗</span></div>
+            <div id="spawn-list" class="spawn-list"><div class="empty-state">Consultando el feed</div></div>
           </section>
         </div>
       </section>
