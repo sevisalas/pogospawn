@@ -30,7 +30,7 @@ El endpoint lee todas las páginas de la tabla (hasta 20.000 filas) con `user_fi
 - Centro de inicio: Valencia, `39.4699, -0.3763`.
 - Distancia geodésica calculada con Haversine y radio terrestre medio de 6371.0088 km.
 - Los registros visibles se limitan siempre a un máximo de 100 km y al radio seleccionado: 5, 10, 25, 50 o 100 km.
-- El contorno discontinuo marca siempre el radio máximo de 100 km; el círculo tenue marca el radio seleccionado. El heatmap usa exactamente la lista de registros filtrada.
+- El contorno discontinuo marca siempre el radio máximo de 100 km; el círculo tenue marca el radio seleccionado. El mapa encuadra el círculo al cargar, cambiar radio o mover el centro. El heatmap usa exactamente la lista de registros filtrada.
 - Se puede cambiar el centro con coordenadas, arrastrando el marcador o haciendo clic en el mapa.
 - Hay 13 zonas guardadas como centros aproximados. Cada zona cuenta registros dentro de 1.5 km; el ranking usa partes iguales de volumen de registros, especies distintas y horas locales activas, normalizadas respecto a la zona con valor más alto de cada métrica dentro del radio.
 - El análisis horario usa la hora local del dispositivo. Las zonas y sus coordenadas son centros representativos, no límites administrativos ni polígonos.
