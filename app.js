@@ -172,6 +172,9 @@
     const query = $('pokemon-filter').value.trim().replace(/^#/, '').toLowerCase();
     const onlyHundos = $('only-hundos').checked;
     document.body.classList.toggle('global-search', onlyHundos);
+    document.querySelector('.city-section').hidden = onlyHundos;
+    document.querySelector('.center-section').hidden = onlyHundos;
+    document.querySelector('.radius-legend').hidden = onlyHundos;
     state.rows = state.rawRows.map((row) => ({ ...row, distance: distanceKm(state.center, row) }))
       .filter((row) => (onlyHundos || row.distance <= state.radius) && (!onlyHundos || row.iv === 100)
         && (!query || String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query)));
