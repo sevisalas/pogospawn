@@ -60,6 +60,8 @@
   }
 
   function initControls() {
+    $('minimum-level').innerHTML += Array.from({ length: 50 }, (_, index) => `<option value="${index + 1}">Nivel ${index + 1} o más</option>`).join('');
+    $('minimum-level').addEventListener('change', render);
     $('radius-options').innerHTML = RADII.map((radius) => `<button class="radius-option${radius === state.radius ? ' active' : ''}" data-radius="${radius}" aria-pressed="${radius === state.radius}">${radius}</button>`).join('');
     $('radius-options').addEventListener('click', (event) => {
       const button = event.target.closest('[data-radius]'); if (!button) return;
@@ -188,19 +190,21 @@
     state.globalHundos = globalHundos;
     if (globalHundos) $('only-hundos').checked = true;
     const onlyHundos = globalHundos || $('only-hundos').checked;
+    const minimumLevel = Number($('minimum-level').value) || 0;
     document.body.classList.toggle('global-search', globalHundos);
     document.querySelector('.city-section').hidden = globalHundos;
     document.querySelector('.center-section').hidden = globalHundos;
     document.querySelector('.radius-legend').hidden = globalHundos;
     state.rows = state.rawRows.map((row) => ({ ...row, distance: distanceKm(state.center, row) }))
       .filter((row) => (globalHundos || row.distance <= state.radius) && (!onlyHundos || row.iv === 100)
+        && (globalHundos || row.level >= minimumLevel)
         && (!queries.length || queries.some((query) => String(row.pokemonId).includes(query) || row.species.toLowerCase().includes(query) || state.searchIds.includes(row.pokemonId))));
     const activeCity = CITIES.find((item) => item.key === state.activeCity);
     $('only-hundos').disabled = globalHundos;
     $('radius-label').textContent = globalHundos ? 'Global' : `${state.radius} km`;
     $('radius-options').classList.toggle('disabled', globalHundos);
     $('radius-note').textContent = globalHundos ? 'La búsqueda inicial de hundos es global.' : 'Radio aplicado a la búsqueda por Pokémon (hasta 300 km).';
-    $('search-note').textContent = globalHundos ? 'Por defecto se buscan hundos en todo PokéCoords. Escribe uno o varios Pokémon para buscar en el radio y elegir Solo 100% o todos.' : 'Separa varios nombres en inglés o números de Pokédex con comas. Activa Solo 100% IV para limitar esta búsqueda.';
+    $('search-note').textContent = globalHundos ? 'Por defecto se buscan hundos en todo PokéCoords. Escribe uno o varios Pokémon para filtrar por radio, nivel y 100% IV.' : `Separa varios nombres en inglés o números de Pokédex con comas. El nivel mínimo se aplica a los resultados recibidos (${minimumLevel || 'cualquier nivel'}).`;
     $('map-subtitle').textContent = globalHundos ? `Hundos globales · ${state.rows.length} resultados recibidos` : `${onlyHundos ? 'Solo 100% IV · ' : ''}Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
     $('stat-spawns-label').textContent = globalHundos ? 'HUNDOS GLOBALES' : (onlyHundos ? 'HUNDOS EN EL RADIO' : 'SPAWNS EN EL RADIO');
     $('stat-species-note').textContent = globalHundos ? 'En resultados globales' : 'En el radio seleccionado';
