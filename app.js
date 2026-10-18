@@ -179,7 +179,7 @@
     $('radius-label').textContent = onlyHundos ? 'Global' : `${state.radius} km`;
     $('radius-options').classList.toggle('disabled', onlyHundos);
     $('radius-note').textContent = onlyHundos ? 'Los hundos se buscan globalmente; el radio no se aplica.' : 'Radio aplicado a la búsqueda por Pokémon (hasta 300 km).';
-    $('search-note').textContent = onlyHundos ? 'PokéCoords devuelve hundos globales. El radio y el centro no limitan esta búsqueda.' : 'Escribe un nombre o número y pulsa Buscar. El radio se aplica a esta búsqueda.';
+    $('search-note').textContent = onlyHundos ? 'PokéCoords devuelve hundos globales (hasta 100 resultados por consulta). El radio y el centro no limitan esta búsqueda.' : 'Escribe un nombre en inglés o número de Pokédex y pulsa Buscar. El radio se aplica a esta búsqueda.';
     $('map-subtitle').textContent = onlyHundos ? `Búsqueda global · ${state.rows.length} hundos recibidos` : `Radio de ${state.radius} km · ${activeCity?.name || 'centro manual'} · ${state.center.lat.toFixed(4)}, ${state.center.lon.toFixed(4)}`;
     $('stat-spawns-label').textContent = onlyHundos ? 'HUNDOS GLOBALES' : 'SPAWNS EN EL RADIO';
     $('stat-species-note').textContent = onlyHundos ? 'En resultados globales' : 'En el radio seleccionado';
