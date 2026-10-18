@@ -78,7 +78,13 @@
     state.centerMarker.on('dragend', () => { const p = state.centerMarker.getLatLng(); setCenter(p.lat, p.lng, false); });
     state.map.on('click', (event) => setCenter(event.latlng.lat, event.latlng.lng));
     if (L.heatLayer) state.heat = L.heatLayer([], { radius: 22, blur: 18, maxZoom: 16, minOpacity: 0.27, gradient: { 0.2: '#b5e7e7', 0.45: '#80d0a5', 0.7: '#ffd267', 1: '#ed704c' } }).addTo(state.map);
+    fitRadius();
     setTimeout(() => state.map.invalidateSize(), 100);
+  }
+
+  function fitRadius() {
+    if (!state.map || !state.radiusCircle) return;
+    state.map.fitBounds(state.radiusCircle.getBounds(), { padding: [18, 18], maxZoom: 12 });
   }
 
   function setCenter(lat, lon, updateInputs = true) {
@@ -87,7 +93,7 @@
     if (state.centerMarker) state.centerMarker.setLatLng([lat, lon]);
     if (state.maxCircle) state.maxCircle.setLatLng([lat, lon]);
     if (state.radiusCircle) state.radiusCircle.setLatLng([lat, lon]);
-    if (state.map) state.map.setView([lat, lon], state.map.getZoom());
+    if (state.map) fitRadius();
     render();
   }
 
@@ -144,7 +150,10 @@
     $('ranking-list').innerHTML = ranking.length ? ranking.slice(0, 8).map((m, i) => `<div class="ranking-row"><span class="zone-name">${String(i + 1).padStart(2, '0')} &nbsp;${safe(m.zone.name)}</span><span>${m.count}</span><span>${m.diversity}</span><span class="rank-score">${m.score}</span></div>`).join('') : '<div class="empty-state">No hay zonas con registros en este radio.</div>';
     $('hour-chart').innerHTML = hours.some((v) => v) ? hours.map((v, h) => `<div class="hour-bar${h === peakHour ? ' peak' : ''}" title="${String(h).padStart(2, '0')}:00 · ${v} registros" style="height:${Math.max(3, v / Math.max(1, ...hours) * 52)}px"></div>`).join('') : '<div class="empty-state">Sin datos horarios todavía</div>';
     $('map-count').textContent = `${state.rows.length.toLocaleString('es-ES')} puntos dentro del radio`;
-    if (state.radiusCircle) state.radiusCircle.setRadius(state.radius * 1000);
+    if (state.radiusCircle) {
+      state.radiusCircle.setRadius(state.radius * 1000);
+      fitRadius();
+    }
     if (state.heat) state.heat.setLatLngs(state.rows.map((r) => [r.lat, r.lon, 0.65]));
   }
 
