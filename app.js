@@ -137,6 +137,8 @@
   async function loadData() {
     if (state.loading) { state.reloadQueued = true; return; }
     state.loading = true; $('data-status').textContent = 'Consultando feed en directo…';
+    $('search-submit').disabled = true;
+    $('search-submit').textContent = 'Buscando…';
     try {
       const params = new URLSearchParams({
         lat: String(state.center.lat), lon: String(state.center.lon), radius: String(state.radius),
@@ -168,13 +170,14 @@
       $('search-submit').textContent = 'Buscar / actualizar';
       $('search-submit').disabled = false;
       render();
+      toast(`Búsqueda actualizada: ${count} resultados.`);
     } catch (error) {
       $('data-status').textContent = 'Feed no disponible';
       document.querySelector('.live-dot').style.background = '#db9b4d';
       document.querySelector('.live-dot').style.boxShadow = '0 0 0 3px #f9eedc';
       $('stat-total').textContent = error.message;
       state.rawRows = []; $('stat-updated').textContent = '—'; render();
-      $('search-submit').textContent = 'Buscar / actualizar';
+      $('search-submit').textContent = 'Reintentar búsqueda';
       $('search-submit').disabled = false;
       toast(error.message);
     } finally {
