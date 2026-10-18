@@ -36,6 +36,7 @@ module.exports = async function handler(req, res) {
   const lon = Number(req.query.lon);
   const radius = Number(req.query.radius || 25);
   const onlyHundos = req.query.hundos === 'true';
+  const minimumLevel = Number(req.query.minLevel || 0);
   const pokemonIds = req.query.pokemonIds
     ? String(req.query.pokemonIds).split(',').map((value) => Number(value.trim()))
     : (req.query.pokemonId ? [Number(req.query.pokemonId)] : []);
@@ -44,6 +45,9 @@ module.exports = async function handler(req, res) {
   }
   if (pokemonIds.length > 50 || pokemonIds.some((id) => !Number.isInteger(id) || id < 1 || id > 2000)) {
     return res.status(400).json({ error: 'El número de Pokédex no es válido.' });
+  }
+  if (!Number.isInteger(minimumLevel) || minimumLevel < 0 || minimumLevel > 35) {
+    return res.status(400).json({ error: 'El nivel mínimo debe estar entre 0 y 35.' });
   }
 
   const headers = credentials();
@@ -59,7 +63,7 @@ module.exports = async function handler(req, res) {
       filter_id: onlyHundos ? 'permanent_100iv_filter' : NAME_SEARCH_FILTER_ID,
       min_iv: onlyHundos ? 100 : 0,
       max_iv: 100,
-      min_lv: onlyHundos ? 0 : 1,
+      min_lv: onlyHundos ? minimumLevel : Math.max(1, minimumLevel),
       max_lv: 35,
     };
     // PokéCoords' hundo filter is global: its recorded request omits the
@@ -93,6 +97,7 @@ module.exports = async function handler(req, res) {
       if (!Number.isFinite(rowLat) || !Number.isFinite(rowLon)) continue;
       const distance = distanceKm(center, { lat: rowLat, lon: rowLon });
       if (onlyHundos && Number(row.iv) !== 100) continue;
+      if (pokemonIds.length && Number(row.level) < minimumLevel) continue;
       if (!globalHundos && distance > radius) continue;
       const key = String(row.id ?? `${row.dex}:${rowLat}:${rowLon}:${row.despawn}`);
       if (!unique.has(key)) unique.set(key, { ...row, distance_km: Number(distance.toFixed(3)) });

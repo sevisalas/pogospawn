@@ -60,8 +60,8 @@
   }
 
   function initControls() {
-    $('minimum-level').innerHTML += Array.from({ length: 50 }, (_, index) => `<option value="${index + 1}">Nivel ${index + 1} o más</option>`).join('');
-    $('minimum-level').addEventListener('change', render);
+    $('minimum-level').innerHTML += Array.from({ length: 35 }, (_, index) => `<option value="${index + 1}">Nivel ${index + 1} o más</option>`).join('');
+    $('minimum-level').addEventListener('change', loadData);
     $('radius-options').innerHTML = RADII.map((radius) => `<button class="radius-option${radius === state.radius ? ' active' : ''}" data-radius="${radius}" aria-pressed="${radius === state.radius}">${radius}</button>`).join('');
     $('radius-options').addEventListener('click', (event) => {
       const button = event.target.closest('[data-radius]'); if (!button) return;
@@ -148,6 +148,7 @@
         $('search-submit').textContent = 'Buscando Pokémon…';
         state.searchIds = [...new Set(await Promise.all(terms.map(resolvePokemonId)))];
         params.set('pokemonIds', state.searchIds.join(','));
+        params.set('minLevel', $('minimum-level').value);
       }
       params.set('hundos', String(state.globalHundos || $('only-hundos').checked));
       const response = await fetch(`/api/spawns?${params}`, { cache: 'no-store' });
