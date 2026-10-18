@@ -24,10 +24,6 @@
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
-  const timeLeft = (value) => {
-    const secs = Math.max(0, Math.floor((new Date(value).getTime() - Date.now()) / 1000));
-    return `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s`;
-  };
   const toast = (message) => { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3500); };
   const searchTerms = (value) => value.split(/[,;\n]+/).map((term) => term.trim()).filter(Boolean);
 
@@ -48,14 +44,11 @@
     const lat = num(row.lat), lon = num(row.lng), id = Number(row.dex);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
     const rawDespawn = row.despawn;
-    const expiry = typeof rawDespawn === 'number' || /^\d+$/.test(String(rawDespawn ?? ''))
-      ? new Date(Number(rawDespawn) < 1e12 ? Number(rawDespawn) * 1000 : Number(rawDespawn)).toISOString()
-      : rawDespawn || null;
     return {
       id: String(row.id ?? `${id}-${lat}-${lon}-${rawDespawn}`), pokemonId: id, species: speciesName(id, row.name), lat, lon,
       cp: Number(row.cp) || 0, level: Number(row.level) || 0, iv: Number(row.iv) || 0,
       atk: Number(row.attack) || 0, def: Number(row.defense) || 0, sta: Number(row.stamina) || 0,
-      expiresAt: expiry, original: row,
+      original: row,
     };
   }
 
@@ -194,7 +187,7 @@
 
   function popup(row) {
     const maps = `https://maps.google.com/?q=${row.lat},${row.lon}`;
-    return `<strong>${safe(row.species)}${row.iv === 100 ? ' · HUNDO 💯' : ''}</strong><br>IV ${row.iv.toFixed(2)}% · ATK ${row.atk} / DEF ${row.def} / PS ${row.sta}<br>CP ${row.cp} · Nivel ${row.level}<br>Expira en ${safe(timeLeft(row.expiresAt))}<br><code>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)}</code><br><a href="${maps}" target="_blank" rel="noopener">Abrir coordenadas</a>`;
+    return `<strong>${safe(row.species)}${row.iv === 100 ? ' · HUNDO 💯' : ''}</strong><br>IV ${row.iv.toFixed(2)}% · ATK ${row.atk} / DEF ${row.def} / PS ${row.sta}<br>CP ${row.cp} · Nivel ${row.level}<br><code>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)}</code><br><a href="${maps}" target="_blank" rel="noopener">Abrir coordenadas</a>`;
   }
 
   function render() {
@@ -249,7 +242,7 @@
       : a.distance - b.distance || b.level - a.level || b.iv - a.iv);
     $('spawn-list').innerHTML = state.rows.length ? sortedRows.slice(0, 250).map((row) => {
       const hundo = row.iv === 100;
-      return `<button class="spawn-row${hundo ? ' hundo' : ''}" data-spawn="${safe(row.id)}"><span class="spawn-sprite">${hundo ? '💯' : `#${row.pokemonId}`}</span><span class="spawn-info"><strong>${safe(row.species)}${hundo ? ' · HUNDO' : ''}</strong><small>IV ${row.iv.toFixed(2)}% · CP ${row.cp} · Nv. ${row.level}</small><small>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)} · expira ${safe(timeLeft(row.expiresAt))}</small></span><span class="spawn-distance">${onlyHundos ? 'Global' : `${row.distance.toFixed(1)} km`}</span></button>`;
+      return `<button class="spawn-row${hundo ? ' hundo' : ''}" data-spawn="${safe(row.id)}"><span class="spawn-sprite">${hundo ? '💯' : `#${row.pokemonId}`}</span><span class="spawn-info"><strong>${safe(row.species)}${hundo ? ' · HUNDO' : ''}</strong><small>IV ${row.iv.toFixed(2)}% · CP ${row.cp} · Nv. ${row.level}</small><small>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)}</small></span><span class="spawn-distance">${onlyHundos ? 'Global' : `${row.distance.toFixed(1)} km`}</span></button>`;
     }).join('') : `<div class="empty-state">${state.loading ? 'Consultando el feed…' : (onlyHundos ? 'PokéCoords no devolvió hundos globales en esta consulta.' : 'No hay spawns en el radio seleccionado.')}</div>`;
     if (globalHundos && state.rows.length && state.map) {
       const bounds = L.latLngBounds(state.rows.map((row) => [row.lat, row.lon]));
@@ -262,15 +255,5 @@
   }
 
   initControls(); initMap(); loadData();
-  setInterval(() => {
-    if (!state.loading) {
-      $('stat-updated').textContent = fmtTime(state.lastUpdated);
-      document.querySelectorAll('.spawn-row').forEach((item) => {
-        const id = item.dataset.spawn, row = state.rows.find((entry) => entry.id === id);
-        const expiry = item.querySelector('.spawn-info small:last-child');
-        if (row && expiry) expiry.textContent = `${row.lat.toFixed(5)}, ${row.lon.toFixed(5)} · expira ${timeLeft(row.expiresAt)}`;
-      });
-    }
-  }, 1000);
   setInterval(() => { if (!document.hidden) loadData(); }, 30000);
 })();
