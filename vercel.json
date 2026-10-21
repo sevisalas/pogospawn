@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/spawns.js": { "maxDuration": 30 },
-    "api/shiny.js": { "maxDuration": 30 }
-  },
-  "rewrites": [
-    { "source": "/api/spawns", "destination": "/api/spawns.js" },
-    { "source": "/api/shiny", "destination": "/api/shiny.js" }
-  ]
+  "functions": { "api/spawns.js": { "maxDuration": 30 } },
+  "rewrites": [{ "source": "/api/spawns", "destination": "/api/spawns.js" }]
 }
