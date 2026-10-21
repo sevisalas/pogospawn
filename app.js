@@ -89,6 +89,8 @@
     });
     $('refresh').addEventListener('click', loadData);
     $('shiny-toggle').addEventListener('click', toggleShinies);
+    $('shiny-account').addEventListener('change', changeShinyAccount);
+    $('shiny-add').addEventListener('click', addShinyAccount);
     $('search-submit').addEventListener('click', loadData);
     $('only-hundos').addEventListener('change', loadData);
     $('pokemon-filter').addEventListener('input', () => {
@@ -203,6 +205,50 @@
     return `<strong>${safe(card.name)}${card.form ? ` (${safe(card.form)})` : ''} · SHINY ✨</strong><br>IV ${pct} · ATK ${safe(iv.attack)} / DEF ${safe(iv.defense)} / PS ${safe(iv.stamina)}<br>CP ${safe(card.cp)} · Nivel ${safe(card.level)}<br>${safe(card.location)} · quedan ${minutesLeft(card.expiresAt)} min<br><code>${num(card.latitude).toFixed(5)}, ${num(card.longitude).toFixed(5)}</code><br><a href="${maps}" target="_blank" rel="noopener">Abrir coordenadas</a>`;
   }
 
+  async function postShiny(body) {
+    const response = await fetch('/api/shiny', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Error ${response.status}`);
+    return data;
+  }
+
+  function fillShinyAccounts(accounts) {
+    const select = $('shiny-account');
+    select.innerHTML = accounts.map((account) => {
+      const name = account.trainer ? account.trainer.name : 'Cuenta en proceso';
+      return `<option value="${safe(account.slot)}"${account.active ? ' selected' : ''}>${safe(name)} · ${safe(account.friend_code)}</option>`;
+    }).join('');
+  }
+
+  async function changeShinyAccount() {
+    $('shiny-account').disabled = true;
+    try {
+      await postShiny({ slot: Number($('shiny-account').value) });
+      shiny.fitted = false;
+      await loadShinies();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      $('shiny-account').disabled = false;
+    }
+  }
+
+  async function addShinyAccount() {
+    const code = $('shiny-friend-code').value;
+    if (code.replace(/\D/g, '').length !== 12) return toast('El Friend Code debe tener 12 dígitos.');
+    $('shiny-add').disabled = true;
+    try {
+      await postShiny({ friend_code: code });
+      $('shiny-friend-code').value = '';
+      toast('Cuenta enviada. Tarda unos segundos en reconocerse.');
+      setTimeout(loadShinies, 6000);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      $('shiny-add').disabled = false;
+    }
+  }
+
   async function loadShinies() {
     if (shiny.loading || !state.map) return;
     shiny.loading = true; $('shiny-toggle').disabled = true;
@@ -213,6 +259,7 @@
       // El radar también devuelve shinys que ya han desaparecido: se descartan.
       const cards = (data.cards || []).filter((card) => card.latitude != null && card.longitude != null
         && Number.isFinite(num(card.latitude)) && Number.isFinite(num(card.longitude)) && minutesLeft(card.expiresAt) > 0);
+      fillShinyAccounts(data.accounts || []);
       shiny.layer.clearLayers();
       cards.forEach((card) => {
         L.circleMarker([num(card.latitude), num(card.longitude)], { radius: 10, color: '#49268a', weight: 2, fillColor: '#f06ac0', fillOpacity: 0.95 })
@@ -236,6 +283,7 @@
     shiny.on = !shiny.on;
     $('shiny-toggle').textContent = shiny.on ? 'Ocultar shinys' : 'Mostrar shinys';
     $('shiny-toggle').setAttribute('aria-pressed', String(shiny.on));
+    $('shiny-account-box').hidden = !shiny.on;
     if (shiny.on) { shiny.layer.addTo(state.map); loadShinies(); return; }
     state.map.removeLayer(shiny.layer); shiny.fitted = false;
     $('shiny-note').textContent = 'Shinys del Shiny Radar, de la cuenta activa. Son globales.';
