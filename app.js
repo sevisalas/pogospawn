@@ -10,6 +10,7 @@
     rawRows: [], rows: [], map: null, heat: null, markers: null, centerMarker: null, radiusCircle: null,
     lastUpdated: null, loading: false, reloadQueued: false, searchIds: [], globalHundos: true, sortMode: 'distance',
   };
+  const shiny = { layer: null, on: false, loading: false };
   const $ = (id) => document.getElementById(id);
   const num = (v) => typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'));
   const rad = (d) => d * Math.PI / 180;
@@ -87,6 +88,7 @@
       setCenter(city.lat, city.lon, true, city.key); loadData();
     });
     $('refresh').addEventListener('click', loadData);
+    $('shiny-toggle').addEventListener('click', toggleShinies);
     $('search-submit').addEventListener('click', loadData);
     $('only-hundos').addEventListener('change', loadData);
     $('pokemon-filter').addEventListener('input', () => {
@@ -106,6 +108,7 @@
     state.centerMarker.on('dragend', () => { const p = state.centerMarker.getLatLng(); setCenter(p.lat, p.lng, false); loadData(); });
     state.map.on('click', (event) => { setCenter(event.latlng.lat, event.latlng.lng); loadData(); });
     state.markers = L.layerGroup().addTo(state.map);
+    shiny.layer = L.layerGroup();
     if (L.heatLayer) state.heat = L.heatLayer([], { radius: 22, blur: 18, maxZoom: 16, minOpacity: 0.22, gradient: { 0.2: '#b5e7e7', 0.45: '#80d0a5', 0.7: '#ffd267', 1: '#ed704c' } }).addTo(state.map);
     fitRadius(); setTimeout(() => state.map.invalidateSize(), 100);
   }
@@ -190,6 +193,54 @@
     return `<strong>${safe(row.species)}${row.iv === 100 ? ' · HUNDO 💯' : ''}</strong><br>IV ${row.iv.toFixed(2)}% · ATK ${row.atk} / DEF ${row.def} / PS ${row.sta}<br>CP ${row.cp} · Nivel ${row.level}<br><code>${row.lat.toFixed(5)}, ${row.lon.toFixed(5)}</code><br><a href="${maps}" target="_blank" rel="noopener">Abrir coordenadas</a>`;
   }
 
+  const minutesLeft = (value) => Math.round((new Date(value).getTime() - Date.now()) / 60000);
+
+  function shinyPopup(card) {
+    const iv = card.iv && typeof card.iv === 'object' ? card.iv : {};
+    const total = Number(iv.attack) + Number(iv.defense) + Number(iv.stamina);
+    const pct = Number.isFinite(total) ? `${Math.round(total / 45 * 100)}%` : '—';
+    const maps = `https://maps.google.com/?q=${card.latitude},${card.longitude}`;
+    return `<strong>${safe(card.name)}${card.form ? ` (${safe(card.form)})` : ''} · SHINY ✨</strong><br>IV ${pct} · ATK ${safe(iv.attack)} / DEF ${safe(iv.defense)} / PS ${safe(iv.stamina)}<br>CP ${safe(card.cp)} · Nivel ${safe(card.level)}<br>${safe(card.location)} · quedan ${minutesLeft(card.expiresAt)} min<br><code>${num(card.latitude).toFixed(5)}, ${num(card.longitude).toFixed(5)}</code><br><a href="${maps}" target="_blank" rel="noopener">Abrir coordenadas</a>`;
+  }
+
+  async function loadShinies() {
+    if (shiny.loading || !state.map) return;
+    shiny.loading = true; $('shiny-toggle').disabled = true;
+    try {
+      const response = await fetch('/api/shiny?radius=25', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ? `${data.error} ${data.detail}` : (data.error || `Error ${response.status}`));
+      // El radar también devuelve shinys que ya han desaparecido: se descartan.
+      const cards = (data.cards || []).filter((card) => card.latitude != null && card.longitude != null
+        && Number.isFinite(num(card.latitude)) && Number.isFinite(num(card.longitude)) && minutesLeft(card.expiresAt) > 0);
+      shiny.layer.clearLayers();
+      cards.forEach((card) => {
+        L.circleMarker([num(card.latitude), num(card.longitude)], { radius: 10, color: '#49268a', weight: 2, fillColor: '#f06ac0', fillOpacity: 0.95 })
+          .bindPopup(shinyPopup(card), { maxWidth: 250 }).addTo(shiny.layer);
+      });
+      $('shiny-note').textContent = `${cards.length} shinys activos · cuenta activa del radar · ${fmtTime(data.generated_at)}`;
+      if (cards.length && !shiny.fitted) {
+        shiny.fitted = true;
+        state.map.fitBounds(L.latLngBounds(cards.map((card) => [num(card.latitude), num(card.longitude)])), { padding: [25, 25], maxZoom: 5 });
+      }
+    } catch (error) {
+      $('shiny-note').textContent = error.message;
+      toast(error.message);
+    } finally {
+      shiny.loading = false; $('shiny-toggle').disabled = false;
+    }
+  }
+
+  function toggleShinies() {
+    if (!state.map) return;
+    shiny.on = !shiny.on;
+    $('shiny-toggle').textContent = shiny.on ? 'Ocultar shinys' : 'Mostrar shinys';
+    $('shiny-toggle').setAttribute('aria-pressed', String(shiny.on));
+    if (shiny.on) { shiny.layer.addTo(state.map); loadShinies(); return; }
+    state.map.removeLayer(shiny.layer); shiny.fitted = false;
+    $('shiny-note').textContent = 'Shinys del Shiny Radar, de la cuenta activa. Son globales.';
+  }
+
   function render() {
     const queries = searchTerms($('pokemon-filter').value).map((term) => term.replace(/^#/, '').toLowerCase());
     const globalHundos = searchTerms($('pokemon-filter').value).length === 0;
@@ -255,5 +306,5 @@
   }
 
   initControls(); initMap(); loadData();
-  setInterval(() => { if (!document.hidden) loadData(); }, 30000);
+  setInterval(() => { if (!document.hidden) { loadData(); if (shiny.on) loadShinies(); } }, 30000);
 })();
